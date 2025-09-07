@@ -431,14 +431,25 @@ const TabNavigation = ({ activeTab, onTabChange, showComparison, onToggleCompari
         </TabButton>
       </nav>
       
-      {/* 比較表示切り替えボタン */}
-      <Button 
-        variant={showComparison ? 'primary' : 'outline'} 
-        size="sm"
-        onClick={onToggleComparison}
-      >
-        📊 比較表示
-      </Button>
+      <div className="flex gap-2">
+        {/* 比較表示切り替えボタン */}
+        <Button 
+          variant={showComparison ? 'primary' : 'outline'} 
+          size="sm"
+          onClick={onToggleComparison}
+        >
+          📊 比較表示
+        </Button>
+        
+        {/* APIテストボタン */}
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => window.open('/api-test', '_blank')}
+        >
+          🧪 APIテスト
+        </Button>
+      </div>
     </div>
   </div>
 );
