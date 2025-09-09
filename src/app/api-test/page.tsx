@@ -51,6 +51,35 @@ interface RedditComment {
   sentimentScore?: number;
 }
 
+interface HatenaBookmark {
+  title: string;
+  link: string;
+  description: string;
+  pubDate: string;
+  bookmarkCount: number;
+  imageUrl?: string;
+  sentiment: {
+    score: number;
+    label: string;
+    emoji: string;
+  };
+  source: string;
+  comments?: HatenaComment[];
+  commentsLoading?: boolean;
+}
+
+interface HatenaComment {
+  user: string;
+  comment: string;
+  timestamp: string;
+  tags: string[];
+  sentiment: {
+    score: number;
+    label: string;
+    emoji: string;
+  };
+}
+
 export default function ApiTestPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -66,6 +95,10 @@ export default function ApiTestPage() {
   const [redditLoading, setRedditLoading] = useState(false);
   const [redditAfter, setRedditAfter] = useState<string>('');
   const [redditHasMore, setRedditHasMore] = useState(true);
+
+  // はてなブックマーク関連の状態
+  const [hatenaBookmarks, setHatenaBookmarks] = useState<HatenaBookmark[]>([]);
+  const [hatenaLoading, setHatenaLoading] = useState(false);
   const [redditSummary, setRedditSummary] = useState<{
     total: number;
     positive: number;
@@ -324,6 +357,70 @@ export default function ApiTestPage() {
     loadRedditPostsWithComments(false);
   };
 
+  // はてなブックマーク統合テスト実行
+  const handleHatenaTest = async () => {
+    console.log('はてなブックマークテスト開始');
+    setHatenaLoading(true);
+    setHatenaBookmarks([]);
+
+    try {
+      const url = '/api/hatena-search?q=マリオカート ワールド&maxResults=20';
+      console.log('Fetching:', url);
+      
+      const response = await fetch(url);
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(`はてなブックマーク API エラー: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Response data:', data);
+      
+      setHatenaBookmarks(data.items || []);
+      console.log('はてなブックマーク結果:', data.items?.length || 0, '件');
+    } catch (error) {
+      console.error('はてなブックマーク取得エラー:', error);
+      alert(`エラー: ${error.message}`);
+    } finally {
+      setHatenaLoading(false);
+    }
+  };
+
+  // はてなブックマークコメント取得
+  const loadHatenaComments = async (url: string, index: number) => {
+    setHatenaBookmarks(prev => prev.map((bookmark, i) => 
+      i === index ? { ...bookmark, commentsLoading: true } : bookmark
+    ));
+
+    try {
+      const response = await fetch(`/api/hatena-comments?url=${encodeURIComponent(url)}`);
+      
+      if (!response.ok) {
+        throw new Error('コメント取得エラー');
+      }
+
+      const data = await response.json();
+      
+      setHatenaBookmarks(prev => prev.map((bookmark, i) => 
+        i === index 
+          ? { 
+              ...bookmark, 
+              comments: data.bookmarks || [], 
+              commentsLoading: false 
+            } 
+          : bookmark
+      ));
+    } catch (error) {
+      console.error('はてなコメント取得エラー:', error);
+      setHatenaBookmarks(prev => prev.map((bookmark, i) => 
+        i === index ? { ...bookmark, commentsLoading: false } : bookmark
+      ));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
@@ -354,6 +451,14 @@ export default function ApiTestPage() {
             className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
           >
             {redditLoading ? "🔄 取得中..." : "📱 Reddit統合テスト"}
+          </button>
+
+          <button
+            onClick={handleHatenaTest}
+            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold"
+            disabled={hatenaLoading}
+          >
+            {hatenaLoading ? "🔄 取得中..." : "📚 はてなブックマーク統合テスト"}
           </button>
 
           <button
@@ -672,7 +777,146 @@ export default function ApiTestPage() {
           </div>
         )}
 
-        {/* 機能説明 */}
+        {/* はてなブックマーク結果表示 */}
+        {hatenaBookmarks.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-xl font-bold text-purple-800 mb-4 flex items-center gap-2">
+              📚 はてなブックマーク結果 ({hatenaBookmarks.length}件)
+            </h3>
+
+            <div className="grid gap-4">
+              {hatenaBookmarks.map((bookmark, index) => (
+                <div key={index} className="bg-white rounded-lg shadow-md border border-purple-100">
+                  <div className="p-6">
+                    <div className="flex items-start gap-4 mb-4">
+                      {/* サムネイル画像 */}
+                      {bookmark.imageUrl && (
+                        <div className="flex-shrink-0">
+                          <img 
+                            src={bookmark.imageUrl} 
+                            alt={bookmark.title}
+                            className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="text-lg font-semibold text-gray-900 flex-1 mr-4">
+                            <a
+                              href={bookmark.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-purple-700 hover:text-purple-900 hover:underline"
+                            >
+                              {bookmark.title}
+                            </a>
+                          </h4>
+                          
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                              bookmark.sentiment.label === 'ポジティブ' 
+                                ? 'bg-green-100 text-green-700' 
+                                : bookmark.sentiment.label === 'ネガティブ'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {bookmark.sentiment.emoji} {bookmark.sentiment.label}
+                            </div>
+                            
+                            <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">
+                              📖 {bookmark.bookmarkCount}
+                            </div>
+                          </div>
+                        </div>
+
+                        {bookmark.description && (
+                          <p className="text-gray-600 mb-4 leading-relaxed">
+                            {bookmark.description.length > 200 
+                              ? `${bookmark.description.substring(0, 200)}...`
+                              : bookmark.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between pt-3 border-t">
+                          <div className="text-xs text-gray-500">
+                            投稿日: {new Date(bookmark.pubDate).toLocaleDateString('ja-JP')}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => loadHatenaComments(bookmark.link, index)}
+                              disabled={bookmark.commentsLoading}
+                              className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded hover:bg-purple-100 disabled:opacity-50"
+                            >
+                              {bookmark.commentsLoading ? '読み込み中...' : 
+                               bookmark.comments ? `コメント(${bookmark.comments.length})` : 'コメント表示'}
+                            </button>
+                            <div className="text-xs text-purple-600 font-medium">
+                              {bookmark.source}
+                            </div>
+                          </div>
+                        </div>
+
+                        {bookmark.comments && bookmark.comments.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-purple-100">
+                            <h5 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                              💬 ブックマークコメント ({bookmark.comments.length}件)
+                            </h5>
+                            
+                            <div className="space-y-3 max-h-60 overflow-y-auto">
+                              {bookmark.comments.slice(0, 5).map((comment, commentIndex) => (
+                                <div key={commentIndex} className="bg-purple-50 rounded-lg p-3">
+                                  <div className="flex items-start justify-between mb-1">
+                                    <span className="font-medium text-sm text-gray-900">
+                                      {comment.user}
+                                    </span>
+                                    <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                      comment.sentiment.label === 'ポジティブ' 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : comment.sentiment.label === 'ネガティブ'
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-gray-100 text-gray-700'
+                                    }`}>
+                                      {comment.sentiment.emoji}
+                                    </div>
+                                  </div>
+                                  {comment.comment && (
+                                    <p className="text-sm text-gray-700 leading-relaxed mb-2">
+                                      {comment.comment.length > 150 
+                                        ? `${comment.comment.substring(0, 150)}...`
+                                        : comment.comment}
+                                    </p>
+                                  )}
+                                  {comment.tags && comment.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                      {comment.tags.slice(0, 3).map((tag, tagIndex) => (
+                                        <span 
+                                          key={tagIndex}
+                                          className="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded"
+                                        >
+                                          #{tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Features */}
         <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
           <h3 className="text-lg font-semibold text-green-900 mb-2">
             実装済み機能
@@ -683,6 +927,7 @@ export default function ApiTestPage() {
             <li>• 動画+コメント統合表示 </li>
             <li>• 無限スクロール機能 </li>
             <li>• Reddit API との連携 </li>
+            <li>• はてなブックマーク API との連携 </li>
             <li>• 感情分析機能（ポジティブ/ネガティブ判定）</li>
             <li>• 口コミデータの可視化 </li>
           </ul>
